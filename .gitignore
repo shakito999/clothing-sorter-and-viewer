@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Runtime / temp outputs
+*.log
+
+# Keep folders but ignore temporary photo content
+raw_photos/**
+vendora_ready/**
+backend/raw_photos/**
+backend/vendora_ready/**
+

@@ -1,0 +1,24 @@
+# Vendora Auto-Lister Dependencies
+
+# Image processing
+Pillow>=10.0.0
+
+# HTTP requests for LM Studio API
+requests>=2.31.0
+
+# FastAPI backend (NEW)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+
+
+# Optional: For better image handling (install if you have issues with Pillow)
+# pillow-heif>=0.13.0  # For HEIF/HEIC image formats
+# imageio>=2.31.0      # For additional image format support
+
+# Optional: For progress bars
+# tqdm>=4.66.0
+
+# Optional: For advanced logging
+# loguru>=0.7.0
