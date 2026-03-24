@@ -14,6 +14,8 @@ frontend/dist/
 # Keep folders but ignore temporary photo content
 raw_photos/**
 vendora_ready/**
+processed/**
 backend/raw_photos/**
 backend/vendora_ready/**
+backend/processed/**
 
