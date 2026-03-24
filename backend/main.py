@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ai_client import LMStudioClient, GarmentGrouper, VendoraExtractor, ImageClassifier
 from image_processor import image_processor, file_manager, ItemMetadata
-from config import INPUT_FOLDER, OUTPUT_FOLDER, BASE_DIR
+from config import INPUT_FOLDER, OUTPUT_FOLDER, BASE_DIR, MODEL_NAME
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -96,15 +96,21 @@ class ConnectionManager:
 
 class ItemUpdate(BaseModel):
     item_folder: str
-    title: str
-    brand: str
-    size: str
-    condition: str
-    material: str
-    color: str = ""
-    measurements: Dict[str, str] = {}
-    visible_flaws: str
-    description: str
+    title: Optional[str] = ""
+    brand: Optional[str] = ""
+    size: Optional[str] = ""
+    condition: Optional[str] = ""
+    material: Optional[str] = ""
+    color: Optional[str] = ""
+    measurements: Optional[Dict[str, Any]] = {}
+    visible_flaws: Optional[str] = ""
+    description: Optional[str] = ""
+    done: Optional[bool] = False
+    images: Optional[List[str]] = None
+
+
+class ModelUpdateRequest(BaseModel):
+    model: str
 
 
 class RestorePhotoRequest(BaseModel):
@@ -118,6 +124,8 @@ class RestorePhotoRequest(BaseModel):
 
 
 manager = ConnectionManager()
+SUPPORTED_MODELS = ["qwen3.5-4b", "qwen3.5-9b"]
+current_model = MODEL_NAME if MODEL_NAME in SUPPORTED_MODELS else SUPPORTED_MODELS[0]
 
 
 # Pipeline state with metadata/time tracking
@@ -207,7 +215,10 @@ def add_log(message: str, level: str = "info"):
 
 async def run_pipeline():
     """Run the image processing pipeline"""
+    # Preserve previously extracted data when starting a new job
+    preserved_extracted_data = state.extracted_data.copy()
     state.reset()
+    state.extracted_data = preserved_extracted_data
     state.is_running = True
     state.started_at = datetime.now()
 
@@ -261,7 +272,7 @@ async def group_images(images: List[str]) -> tuple:
     if not images:
         return [], classifications_cache
 
-    client = LMStudioClient()
+    client = LMStudioClient(model=current_model)
     grouper = GarmentGrouper(client)
     classifier = ImageClassifier(client)
     extractor = VendoraExtractor(client)
@@ -335,6 +346,7 @@ async def group_images(images: List[str]) -> tuple:
                     "image": test_name,
                     "image_data": test_display,
                     "type": test_type,
+                    "caption": test_caption,
                     "batch": i,
                     "reason": f"Time diff: {int(time_diff)}s"
                 }
@@ -422,12 +434,14 @@ async def extract_and_file(batches: List[List[str]], classifications_cache: dict
     if classifications_cache is None:
         classifications_cache = {}
 
-    client = LMStudioClient()
+    client = LMStudioClient(model=current_model)
     extractor = VendoraExtractor(client)
+    start_index = get_next_output_index()
 
     for batch_idx, batch in enumerate(batches, start=1):
         if state.should_stop:
             break
+        output_index = start_index + batch_idx - 1
 
         state.current_batch = batch_idx
         state.total_batches = len(batches)
@@ -504,9 +518,9 @@ async def extract_and_file(batches: List[List[str]], classifications_cache: dict
                 add_log(f"  Flaws: {item_data['visible_flaws']}", "warning")
 
             # Create folder
-            item_title = item_data.get("title", f"Item_{batch_idx}")
+            item_title = item_data.get("title", f"Item_{output_index}")
             safe_title = sanitize_folder_name(item_title)
-            item_folder = os.path.join(OUTPUT_FOLDER, f"{safe_title}_{batch_idx:03d}")
+            item_folder = os.path.join(OUTPUT_FOLDER, f"{safe_title}_{output_index:03d}")
             os.makedirs(item_folder, exist_ok=True)
 
             # Copy images and aggregate captions into one file
@@ -525,8 +539,10 @@ async def extract_and_file(batches: List[List[str]], classifications_cache: dict
             item_data["image_types"] = image_types
             item_data["image_captions"] = image_captions
             item_data["batch_index"] = batch_idx
+            item_data["output_index"] = output_index
             item_data["processed_at"] = datetime.now().isoformat()
             item_data["output_folder"] = item_folder
+            item_data["done"] = bool(item_data.get("done", False))
 
             # Ensure required fields exist
             if "measurements" not in item_data or item_data["measurements"] is None:
@@ -587,6 +603,7 @@ def load_state_from_disk():
             item_data = ItemMetadata.load_from_json(metadata_path)
             if item_data:
                 item_data["output_folder"] = item_folder
+                item_data["done"] = bool(item_data.get("done", False))
                 state.extracted_data.append(item_data)
                 count += 1
         except Exception as e:
@@ -604,6 +621,24 @@ def sanitize_folder_name(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*]', "", name)
     name = name.replace(" ", "_")
     return name[:50]
+
+
+def get_next_output_index() -> int:
+    import re
+    if not os.path.isdir(OUTPUT_FOLDER):
+        return 1
+    max_index = 0
+    for folder_name in os.listdir(OUTPUT_FOLDER):
+        if not os.path.isdir(os.path.join(OUTPUT_FOLDER, folder_name)):
+            continue
+        # Extract the trailing 3+ digit number from folder name (e.g., Brand_Item_005)
+        match = re.search(r'(\d{3,})$', folder_name)
+        if match:
+            try:
+                max_index = max(max_index, int(match.group(1)))
+            except ValueError:
+                pass
+    return max_index + 1
 
 
 def open_folder_with_explorer(path: str):
@@ -630,6 +665,52 @@ async def root():
 async def get_state():
     """Get current pipeline state"""
     return state.to_dict()
+
+
+@app.post("/api/refresh")
+async def refresh_state():
+    """Re-scan OUTPUT_FOLDER and sync state with actual filesystem. Use this when files were deleted externally."""
+    # Clear and reload from disk
+    state.extracted_data = []
+    load_state_from_disk()
+    add_log("State refreshed from disk", "info")
+    await manager.broadcast({"type": "state", "data": state.to_dict()})
+    return {"message": "State refreshed", "count": len(state.extracted_data)}
+
+
+@app.get("/api/models")
+async def get_models():
+    return {"current": current_model, "available": SUPPORTED_MODELS}
+
+
+@app.post("/api/model")
+async def set_model(payload: ModelUpdateRequest):
+    global current_model
+    if payload.model not in SUPPORTED_MODELS:
+        raise HTTPException(status_code=400, detail="Unsupported model")
+    
+    current_model = payload.model
+    
+    # Update config.py for persistence
+    try:
+        config_path = os.path.join(BASE_DIR, "config.py")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            
+            with open(config_path, "w", encoding="utf-8") as f:
+                for line in lines:
+                    if line.strip().startswith("MODEL_NAME ="):
+                        f.write(f'MODEL_NAME = "{current_model}"  # Updated via UI\n')
+                    else:
+                        f.write(line)
+        add_log(f"Config updated: {current_model}", "success")
+    except Exception as e:
+        logger.error(f"Failed to update config.py: {e}")
+        add_log(f"Failed to persist model choice: {e}", "warning")
+
+    await manager.broadcast_state()
+    return {"status": "success", "current": current_model}
 
 
 @app.get("/api/images")
@@ -759,6 +840,7 @@ async def websocket_endpoint(websocket: WebSocket):
 async def save_item(update: ItemUpdate):
     """Save edited item metadata and description back to folder"""
     try:
+        logger.info(f"Saving item: {update.item_folder}")
         item_path = os.path.normpath(update.item_folder)
         if not os.path.exists(item_path):
             raise HTTPException(status_code=404, detail="Item folder not found")
@@ -766,7 +848,15 @@ async def save_item(update: ItemUpdate):
         metadata_dir = os.path.join(item_path, "metadata")
         os.makedirs(metadata_dir, exist_ok=True)
 
+        # Load existing data first to avoid losing fields (like images, batch_index)
+        existing_data = ItemMetadata.load_from_json(metadata_dir)
+        if not existing_data:
+             # Fallback to loading from item_path if metadata/ exists but json is missing
+             existing_data = ItemMetadata.load_from_json(item_path)
+
+        # Merge updates into existing data
         data = {
+            **existing_data,
             "title": update.title,
             "brand": update.brand,
             "size": update.size,
@@ -775,14 +865,19 @@ async def save_item(update: ItemUpdate):
             "color": update.color,
             "measurements": update.measurements,
             "visible_flaws": update.visible_flaws,
-            "description": update.description
+            "description": update.description,
+            "done": bool(update.done)
         }
+        
+        if update.images is not None:
+            data["images"] = update.images
 
         ItemMetadata.save_as_json(data, metadata_dir)
         ItemMetadata.save_listing_description(update.description, metadata_dir)
         ItemMetadata.save_listing_description(update.description, item_path)
         ItemMetadata.save_as_text(data, metadata_dir)
 
+        # Update in-memory state
         for i, item in enumerate(state.extracted_data):
             if os.path.normpath(item.get("output_folder", "")) == item_path:
                 state.extracted_data[i] = {**item, **data}
@@ -837,24 +932,55 @@ async def get_item_photo(path: str):
 
 @app.delete("/api/item-photo")
 async def delete_item_photo(path: str):
-    """Delete photo from path and update metadata if possible"""
+    """Delete photo from vendora_ready folder with 15-second undo window"""
     try:
         normalized_path = os.path.normpath(path)
-        if not os.path.exists(normalized_path):
-            alt_path = os.path.join(OUTPUT_FOLDER, normalized_path)
-            if os.path.exists(alt_path):
-                normalized_path = alt_path
+        
+        # Handle path resolution - find the actual file
+        actual_path = None
+        if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
+            actual_path = normalized_path
+        else:
+            # Try relative to OUTPUT_FOLDER (vendora_ready)
+            rel_path = normalized_path
+            # If path is absolute, try to extract the relative part after OUTPUT_FOLDER
+            if os.path.isabs(normalized_path):
+                output_basename = os.path.basename(OUTPUT_FOLDER)
+                path_parts = normalized_path.replace("\\", "/").split("/")
+                if output_basename in path_parts:
+                    idx = path_parts.index(output_basename)
+                    rel_path = "/".join(path_parts[idx + 1:])
+            
+            alt_path = os.path.join(OUTPUT_FOLDER, rel_path)
+            if os.path.exists(alt_path) and os.path.isfile(alt_path):
+                actual_path = alt_path
             else:
-                raise HTTPException(status_code=404, detail="Photo not found")
+                # Last resort: search in OUTPUT_FOLDER by filename only
+                filename = os.path.basename(normalized_path)
+                for root, dirs, files in os.walk(OUTPUT_FOLDER):
+                    # Skip .trash directories
+                    if '.trash' in root:
+                        continue
+                    if filename in files:
+                        actual_path = os.path.join(root, filename)
+                        break
+        
+        if actual_path is None:
+            raise HTTPException(status_code=404, detail=f"Photo not found: {path}")
+        
+        normalized_path = actual_path
 
         filename = os.path.basename(normalized_path)
         parent_dir = os.path.dirname(normalized_path)
-        relative_parent = os.path.relpath(parent_dir, OUTPUT_FOLDER)
-        trash_dir = os.path.join(OUTPUT_FOLDER, ".trash", datetime.now().strftime("%Y%m%d"), str(uuid.uuid4()), relative_parent)
+        
+        # Move to .trash with unique name
+        trash_dir = os.path.join(OUTPUT_FOLDER, ".trash")
         os.makedirs(trash_dir, exist_ok=True)
-        trash_path = os.path.join(trash_dir, filename)
+        trash_filename = f"{uuid.uuid4()}_{filename}"
+        trash_path = os.path.join(trash_dir, trash_filename)
         shutil.move(normalized_path, trash_path)
 
+        # Update metadata
         metadata_json = os.path.join(parent_dir, "metadata", "vendora_data.json")
         if not os.path.exists(metadata_json):
             metadata_json = os.path.join(parent_dir, "vendora_data.json")
@@ -894,6 +1020,18 @@ async def delete_item_photo(path: str):
                 logger.error(f"Failed to update metadata during deletion: {meta_e}")
 
         add_log(f"Deleted image: {filename}", "warning")
+        
+        # Schedule permanent deletion after 15 seconds
+        async def delayed_delete():
+            try:
+                await asyncio.sleep(15)
+                if os.path.exists(trash_path):
+                    os.remove(trash_path)
+            except Exception as e:
+                logger.error(f"Delayed delete failed: {e}")
+        
+        asyncio.create_task(delayed_delete())
+        
         await manager.broadcast_state()
         return {
             "status": "success",
@@ -975,6 +1113,206 @@ async def restore_item_photo(payload: RestorePhotoRequest):
         if isinstance(e, HTTPException):
             raise e
         logger.error(f"Error restoring photo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RecombineRequest(BaseModel):
+    item_folders: List[str]
+
+
+@app.post("/api/recombine-items")
+async def recombine_items(payload: RecombineRequest):
+    """Re-extract data from multiple folders as a single garment using AI."""
+    try:
+        folders = payload.item_folders
+        if len(folders) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 folders to recombine")
+        
+        # Normalize paths and filter to existing ones
+        normalized_folders = [os.path.normpath(f) for f in folders]
+        existing_folders = [f for f in normalized_folders if os.path.exists(f)]
+        
+        if len(existing_folders) < 1:
+            raise HTTPException(status_code=404, detail="No valid folders found")
+        
+        # Collect all images from all folders by scanning directly
+        all_image_paths = []
+        for folder in existing_folders:
+            # Scan folder for actual image files
+            for fname in os.listdir(folder):
+                if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                    full_path = os.path.join(folder, fname)
+                    if os.path.isfile(full_path):
+                        all_image_paths.append(full_path)
+        
+        add_log(f"Collected {len(all_image_paths)} images from folders", "info")
+        
+        if not all_image_paths:
+            raise HTTPException(status_code=400, detail="No images found in selected folders")
+        
+        add_log(f"Recombining {len(existing_folders)} folders with {len(all_image_paths)} images", "info")
+        
+        # Use VendoraExtractor and ImageClassifier like the pipeline
+        client = LMStudioClient(model=current_model)
+        extractor = VendoraExtractor(client)
+        classifier = ImageClassifier(client)
+        
+        # Step 1: Classify images to get image_types and captions (like pipeline)
+        image_types = []
+        image_captions = []
+        for img_path in all_image_paths:
+            try:
+                b64 = image_processor.compress_image(img_path, max_size=800, quality=80)
+                img_type, caption = await asyncio.to_thread(classifier.classify, b64)
+                image_types.append(img_type)
+                image_captions.append(caption)
+            except Exception as e:
+                logger.error(f"Classification failed for {img_path}: {e}")
+                image_types.append("UNKNOWN")
+                image_captions.append("")
+        
+        add_log(f"Classified {len(image_types)} images", "info")
+        
+        # Step 2: Compress images for extraction
+        # Use Smart Hybrid: 1 full front at 800px + all detail shots at 1024px
+        compressed_images = []
+        has_full_front = False
+        for img_path, img_type in zip(all_image_paths, image_types):
+            if img_type == "FULL_FRONT_FLATLAY":
+                # First full front image at lower res to save VRAM
+                if not has_full_front:
+                    compressed_images.append(image_processor.compress_image(img_path, max_size=800, quality=85))
+                    has_full_front = True
+                # Additional full front shots still get added
+            else:
+                # Detail shots at full resolution
+                compressed_images.append(image_processor.compress_image(img_path, max_size=1024, quality=90))
+        
+        if not compressed_images:
+            compressed_images.append(image_processor.compress_image(all_image_paths[0], max_size=800, quality=85))
+        
+        # Step 3: Extract data (bypass grouping - treat as single garment)
+        try:
+            item_data = await asyncio.to_thread(extractor.extract_data, compressed_images, [])
+        except Exception as extract_error:
+            logger.error(f"AI extraction failed during recombine: {extract_error}")
+            raise HTTPException(status_code=500, detail=f"AI extraction failed: {extract_error}")
+        
+        # Generate AI description using the extracted data
+        try:
+            description = await asyncio.to_thread(extractor.generate_ai_description, item_data, [])
+        except Exception as desc_err:
+            logger.error(f"Description generation failed: {desc_err}")
+            description = f"{item_data.get('brand', '')} {item_data.get('item_type', '')} in {item_data.get('color', '')} color"
+        
+        # Create new folder for merged item
+        item_title = item_data.get("title", f"Combined_Item_{get_next_output_index():03d}")
+        safe_title = sanitize_folder_name(item_title)
+        output_index = get_next_output_index()
+        new_folder = os.path.join(OUTPUT_FOLDER, f"{safe_title}_{output_index:03d}")
+        os.makedirs(new_folder, exist_ok=True)
+        
+        # Copy images to new folder (preserve originals)
+        moved_images = []
+        for img_path in all_image_paths:
+            filename = os.path.basename(img_path)
+            dst = os.path.join(new_folder, filename)
+            # Handle duplicates
+            if os.path.exists(dst):
+                base, ext = os.path.splitext(filename)
+                new_filename = f"{base}_{uuid.uuid4().hex[:8]}{ext}"
+                dst = os.path.join(new_folder, new_filename)
+                moved_images.append(new_filename)
+            else:
+                moved_images.append(filename)
+            try:
+                shutil.copy2(img_path, dst)
+            except Exception as e:
+                logger.error(f"Failed to copy {img_path} to {dst}: {e}")
+                raise
+        
+        # Prepare metadata with proper field mapping
+        condition_notes = item_data.get("condition_notes", "")
+        condition = "Good"
+        if condition_notes and condition_notes.lower() not in ("none", "null", ""):
+            notes_lower = condition_notes.lower()
+            if "like new" in notes_lower or "excellent" in notes_lower:
+                condition = "Excellent"
+            elif "good" in notes_lower:
+                condition = "Good"
+            elif "gently used" in notes_lower or "used" in notes_lower:
+                condition = "Gently Used"
+        
+        # Update item_data with processed info
+        item_data["title"] = item_title
+        item_data["condition"] = condition
+        item_data["description"] = description
+        item_data["images"] = moved_images
+        item_data["image_types"] = image_types[:len(moved_images)]
+        item_data["image_captions"] = image_captions[:len(moved_images)]
+        item_data["output_folder"] = new_folder
+        item_data["done"] = False
+        item_data["batch_index"] = output_index
+        
+        # Ensure measurements field exists - parse measurement_cm string into dict
+        if "measurements" not in item_data:
+            item_data["measurements"] = {}
+        
+        # Parse measurement_cm string into measurements dict if present
+        measurement_cm = item_data.get("measurement_cm", "")
+        if measurement_cm and measurement_cm not in ("null", "None", ""):
+            # Parse "P2P: 50cm, Length: 70cm" format
+            import re
+            p2p_match = re.search(r'P2P[:\s]*(\d+(?:\.\d+)?)\s*cm', measurement_cm, re.IGNORECASE)
+            length_match = re.search(r'Length[:\s]*(\d+(?:\.\d+)?)\s*cm', measurement_cm, re.IGNORECASE)
+            if p2p_match:
+                item_data["measurements"]["chest"] = f"{p2p_match.group(1)}cm"
+            if length_match:
+                item_data["measurements"]["length"] = f"{length_match.group(1)}cm"
+        
+        # Save to metadata subfolder (like pipeline does)
+        metadata_folder = os.path.join(new_folder, "metadata")
+        os.makedirs(metadata_folder, exist_ok=True)
+        ItemMetadata.save_as_json(item_data, metadata_folder)
+        ItemMetadata.save_as_text(item_data, metadata_folder)
+        ItemMetadata.save_listing_description(description, metadata_folder)
+        ItemMetadata.save_listing_description(description, new_folder)
+        ItemMetadata.create_readme(metadata_folder, item_data)
+        
+        # Move old folders to trash (simple structure: .trash/foldername - NO nesting, NO uuid)
+        trash_base = os.path.join(OUTPUT_FOLDER, ".trash")
+        os.makedirs(trash_base, exist_ok=True)
+        for folder in existing_folders:
+            if folder != new_folder and os.path.exists(folder):
+                folder_name = os.path.basename(folder)
+                # Simple flat structure: .trash/foldername (handle duplicates by adding suffix only if needed)
+                trash_dest = os.path.join(trash_base, folder_name)
+                if os.path.exists(trash_dest):
+                    # Just overwrite/move into existing trash folder
+                    for item in os.listdir(folder):
+                        shutil.move(os.path.join(folder, item), trash_dest)
+                    os.rmdir(folder)
+                else:
+                    shutil.move(folder, trash_dest)
+                add_log(f"Trashed old folder: {folder_name}", "info")
+        
+        # Update in-memory state
+        # Remove old items
+        state.extracted_data = [
+            item for item in state.extracted_data
+            if os.path.normpath(item.get("output_folder", "")) not in [os.path.normpath(f) for f in existing_folders]
+        ]
+        # Add new item
+        state.extracted_data.append(item_data)
+        
+        add_log(f"Successfully recombined into: {item_title}", "success")
+        await manager.broadcast_state()
+        
+        return {"success": True, "merged_folder": new_folder, "title": item_title}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error recombining items: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

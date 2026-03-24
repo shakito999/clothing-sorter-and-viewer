@@ -5,7 +5,7 @@ Adjust these settings based on your LM Studio server and preferences
 
 # === LM Studio Server Settings ===
 LM_STUDIO_BASE_URL = "http://localhost:1234/v1"  # LM Studio default
-MODEL_NAME = "qwen3.5-4b"  # Your model name in LM Studio
+MODEL_NAME = "qwen3.5-9b"  # Updated via UI
 
 # === API Settings ===
 API_TIMEOUT = 120  # seconds - timeout for each API call

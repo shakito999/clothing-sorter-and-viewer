@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class LMStudioClient:
     """Client for interacting with LM Studio's local API"""
     
-    def __init__(self, base_url: str = LM_STUDIO_BASE_URL, model: str = MODEL_NAME):
+    def __init__(self, base_url: str = LM_STUDIO_BASE_URL, model: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
-        self.model = model
+        self.model = model or MODEL_NAME
         self.timeout = API_TIMEOUT
         
     def _make_request(self, payload: dict) -> dict:
@@ -526,6 +526,16 @@ CRITICAL INSTRUCTIONS:
 - FINGERS/HANDS: IGNORE them.
 - CONDITION MAPPING: Use ONLY: 'Like New', 'Excellent', 'Good', 'Gently Used'.
 - FLAW REDIRECTION: Move flaws to `condition_notes`.
+- SIZE NORMALIZATION: ONLY apply this if the tagged size is purely numeric (e.g., "48", "32", "12").
+  * If the size is already a letter (S, M, L, XL, XXL, XS) or contains letters, DO NOT add any normalization - keep it exactly as written.
+  * For numeric sizes, provide the closest letter size equivalent (S-XXL). Format as: "[Numeric] (≈ [Letter])".
+  * European sizes: 44≈S, 46≈M, 48≈L, 50≈XL, 52≈XXL, 54≈3XL, 56≈4XL
+  * US/Men waist: 28≈XS, 30≈S, 32≈M, 34≈L, 36≈XL, 38≈XXL, 40≈3XL
+  * US Women: 0-2≈XS, 4-6≈S, 8-10≈M, 12-14≈L, 16-18≈XL, 20-22≈XXL
+  * Kids/Juniors: 2≈XS, 3≈S, 4≈M, 5≈L, 6≈XL, 7≈XXL
+  * UK: 6≈XS, 8≈S, 10≈M, 12≈L, 14≈XL, 16≈XXL
+  * Examples: "48 (≈ L)", "50 (≈ XL)", "32 (≈ M)", "3 (≈ S)", "12 (≈ L)"
+  * If it's a range (e.g. "48-50"), pick the midpoint and normalize: "49 (≈ L/XL)".
 
 Required JSON Structure (ONLY include fields with confirmed info):
 {
@@ -628,13 +638,17 @@ CRITICAL DATA RULES:
 5. COMPOSITION CONFLICTS: If tags conflict, use the most specific one. Transcribe materials exactly (e.g. "[X]% [Material], [Y]% [Material]").
 6. "OTHER" Measurements: If there are additional measurements like "Sleeve", list them in the [Other] field.
 7. OMIT EMPTY FIELDS: If there are NO 'Other' measurements, COMPLETELY DELETE the `[Other]:` line from the template. Do not write "None" or "Not measured".
-8. CONDITION MAPPING: Use ONLY these terms: 'Like New', 'Excellent', 'Good', or 'Gently Used'. 
+8. CONDITION MAPPING: Most items should be 'Excellent' or 'Perfect' unless there are VISIBLE PILLING, COLOR LOSS/FADING, or SIGNIFICANT flaws. Use ONLY these terms: 'Like New', 'Excellent', 'Good', 'Gently Used'.
+   - EXCELLENT/PERFECT: No visible flaws, pilling, or color loss - like new or barely used
+   - GOOD: Minor signs of wear that are barely noticeable
+   - GENTLY USED: Visible pilling, slight color fading, or other moderate wear
+   - Do NOT use 'Gently Used' for minor stains that are hidden/detachable - those go in the description
 9. FLAW REDIRECTION: If there are flaws (stains, holes) in the 'Condition Notes', do NOT list them in the 'Condition:' line of the metadata. Instead, weave them into the 'About the Piece' or 'Key Detail' section.
  
 Write creative but honest copy for the "About the Piece", "Style Note" and "Key Detail" sections based on the metadata.
 
 ---TEMPLATE START---
-(Note: This description was automatically generated for your convenience. Please refer to the photos for full accuracy on condition and measurements.)
+# (Note: This description was automatically generated for your convenience. Please refer to the photos for full accuracy on condition and measurements.)
 
 [Brand] [Item Name/Model] — [Color]
 Brand: [Brand Name]

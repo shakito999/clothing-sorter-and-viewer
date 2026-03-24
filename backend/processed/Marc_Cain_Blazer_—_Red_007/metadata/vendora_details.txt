@@ -1,0 +1,64 @@
+Item_type: Blazer
+Color: Red
+Brand: Marc Cain
+Size: None
+Material: None
+Measurement_cm: P2P: 41cm, Length: 59cm
+Condition_notes: None
+Image_type: None
+Title: Marc Cain Blazer — Red
+Images: ['20260309_175504.jpg', '20260309_175504.jpg', '20260309_175524.jpg', '20260309_175528.jpg', '20260309_175622.jpg', '20260309_175636.jpg', '20260309_175729.jpg']
+Image_types: ['FULL_FRONT_FLATLAY', 'FULL_FRONT_FLATLAY', 'DETAIL_SHOT', 'DETAIL_SHOT', 'DETAIL_SHOT', 'DETAIL_SHOT', 'BACK_VIEW']
+Image_captions: ['Red blazer with black buttons and a visible neck tag reading MARC BY MARCO.', 'Red blazer with black buttons and a visible neck tag reading MARC BY MARCO.', "Detail shot showing a dark brown button with 'MARC CAIN' embossed on the front of a red garment.", 'Neck tag reading MARCCAIN. No tape measure, care label, or flaw visible.', 'Horizontal tape measure showing 41cm at the garment edge.', "Vertical tape measure showing 59cm at the fabric's edge.", 'Back view showing red long-sleeved garment with visible center seam and raglan sleeve construction.']
+Batch_index: 7
+Processed_at: 2026-03-23T18:52:07.875898
+Output_folder: ./vendora_ready\Marc_Cain_Blazer_—_Red_007
+Condition: Good
+Enhanced_description: Marc Cain Blazer — Red
+Brand: Marc Cain
+Size: None
+Condition: Like New
+Composition: Unknown
+Color: Red
+
+Measurements (Laid Flat):
+Pit-to-Pit: 41cm
+Length: 59cm
+
+About the Piece
+A vibrant red blazer from Marc Cain, perfect for adding a bold pop of color to your wardrobe. This piece is in pristine condition and ready for its next stylish owner.
+
+Style Note: Chic & Bold
+
+Key Detail: Features black buttons with "MARC CAIN" embossed on one button; neck tag reads MARC BY MARCO/MARCCAIN.
+
+Seller Notes
+Shipping: 🚀 Next day shipping guaranteed!
+
+Shop My Closet: Check out my other offers for more Marc Cain items—I'm happy to offer bundle discounts if you see something else you like!
+
+Questions? Drop a comment or send an offer. I'm responsive and ready to ship.
+Description: Marc Cain Blazer — Red
+Brand: Marc Cain
+Size: None
+Condition: Like New
+Composition: Unknown
+Color: Red
+
+Measurements (Laid Flat):
+Pit-to-Pit: 41cm
+Length: 59cm
+
+About the Piece
+A vibrant red blazer from Marc Cain, perfect for adding a bold pop of color to your wardrobe. This piece is in pristine condition and ready for its next stylish owner.
+
+Style Note: Chic & Bold
+
+Key Detail: Features black buttons with "MARC CAIN" embossed on one button; neck tag reads MARC BY MARCO/MARCCAIN.
+
+Seller Notes
+Shipping: 🚀 Next day shipping guaranteed!
+
+Shop My Closet: Check out my other offers for more Marc Cain items—I'm happy to offer bundle discounts if you see something else you like!
+
+Questions? Drop a comment or send an offer. I'm responsive and ready to ship.

@@ -1,0 +1,66 @@
+Item_type: Hoodie
+Color: Black
+Brand: Nikin
+Size: M
+Material: 100% Cotton
+Measurement_cm: P2P: 50cm, Length: 49cm
+Condition_notes: None
+Image_type: None
+Title: Nikin Hoodie — Black
+Images: ['20260309_200956.jpg', '20260309_200956.jpg', '20260309_201021.jpg', '20260309_201050.jpg', '20260309_201108.jpg', '20260309_201132.jpg', '20260309_201141.jpg']
+Image_types: ['FULL_FRONT_FLATLAY', 'FULL_FRONT_FLATLAY', 'DETAIL_SHOT', 'DETAIL_SHOT', 'DETAIL_SHOT', 'DETAIL_SHOT', 'DETAIL_SHOT']
+Image_captions: ['Black cropped hoodie with small tree logo on left chest. Hood visible at top.', 'Black cropped hoodie with small tree logo on left chest. Hood visible at top.', 'Back view showing white embroidered tree design on black fabric.', 'Neck tag reading Nikin Size M. Care label showing 100% Cotton. One Product Plants One Tree logo visible.', "Neck tag reading 'Designed in Switzerland Made in Portugal' on black garment.", 'Vertical tape measure showing 49cm at the hem edge.', 'Horizontal tape measure showing 50cm at the garment edge.']
+Batch_index: 37
+Processed_at: 2026-03-23T18:57:50.438630
+Output_folder: ./vendora_ready\Nikin_Hoodie_—_Black_037
+Condition: Good
+Enhanced_description: Nikin Hoodie — Black
+Brand: Nikin
+Size: M
+Condition: Like New
+Composition: 100% Cotton
+Color: Black
+
+Measurements (Laid Flat):
+Pit-to-Pit: 50cm
+Length: 49cm
+
+About the Piece
+A sleek, minimalist black cropped hoodie featuring a small tree logo on the left chest. This piece embodies the eco-conscious aesthetic of Nikin, combining premium 100% cotton comfort with a stylish, modern silhouette perfect for layering or wearing alone.
+
+Style Note: Eco-Chic / Minimalist Streetwear
+
+Key Detail
+White embroidered tree design on the back; "Designed in Switzerland Made in Portugal" neck tag; One Product Plants One Tree certification visible.
+
+Seller Notes
+Shipping: 🚀 Next day shipping guaranteed!
+
+Shop My Closet: Check out my other offers for more Nikin items—I'm happy to offer bundle discounts if you see something else you like!
+
+Questions? Drop a comment or send an offer. I'm responsive and ready to ship.
+Description: Nikin Hoodie — Black
+Brand: Nikin
+Size: M
+Condition: Like New
+Composition: 100% Cotton
+Color: Black
+
+Measurements (Laid Flat):
+Pit-to-Pit: 50cm
+Length: 49cm
+
+About the Piece
+A sleek, minimalist black cropped hoodie featuring a small tree logo on the left chest. This piece embodies the eco-conscious aesthetic of Nikin, combining premium 100% cotton comfort with a stylish, modern silhouette perfect for layering or wearing alone.
+
+Style Note: Eco-Chic / Minimalist Streetwear
+
+Key Detail
+White embroidered tree design on the back; "Designed in Switzerland Made in Portugal" neck tag; One Product Plants One Tree certification visible.
+
+Seller Notes
+Shipping: 🚀 Next day shipping guaranteed!
+
+Shop My Closet: Check out my other offers for more Nikin items—I'm happy to offer bundle discounts if you see something else you like!
+
+Questions? Drop a comment or send an offer. I'm responsive and ready to ship.
